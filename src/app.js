@@ -4,20 +4,21 @@ const fastify = require("fastify")({
 
 const AWS = require("aws-sdk");
 
-// AWS region
-const REGION = "ap-south-1"; // change as needed
+const REGION = "ap-south-1";
 const SECRET_NAME = "myapp-secret";
 
 let SECRET_KEY = null;
+let PORT = 3000; 
 
-// Create a Secrets Manager client
 const secretsManager = new AWS.SecretsManager({ region: REGION });
 
 async function loadSecret() {
   try {
     const data = await secretsManager.getSecretValue({ SecretId: SECRET_NAME }).promise();
-    SECRET_KEY = data.SecretString;
-    console.log("Secret key loaded from AWS Secrets Manager");
+    const secret = JSON.parse(data.SecretString); 
+    SECRET_KEY = secret.APP_SECRET_KEY;
+    PORT = secret.PORT || PORT; 
+    console.log("Secret key and port loaded from AWS Secrets Manager:", { SECRET_KEY, PORT });
   } catch (err) {
     console.error("Failed to load secret key from Secrets Manager", err);
     process.exit(1);
@@ -28,7 +29,6 @@ const users = {};
 
 fastify.post("/signup", async (request, reply) => {
   const { username, password } = request.body;
-
   console.log("Signup attempt:", username);
 
   if (users[username]) {
@@ -48,7 +48,6 @@ fastify.post("/signup", async (request, reply) => {
 
 fastify.post("/login", async (request, reply) => {
   const { username, password } = request.body;
-
   console.log("Login attempt:", username);
 
   const user = users[username];
@@ -57,23 +56,17 @@ fastify.post("/login", async (request, reply) => {
     return reply.code(401).send({ message: "Invalid credentials" });
   }
 
-  console.log("Login successful:", {
-    username,
-    issuedAt: new Date().toISOString(),
-  });
+  console.log("Login successful:", { username, issuedAt: new Date().toISOString() });
 
-  return reply.send({
-    message: `Logged in with the secret: ${SECRET_KEY}`,
-  });
+  return reply.send({ message: `Logged in with the secret: ${SECRET_KEY}` });
 });
 
 const start = async () => {
-  await loadSecret();
+  await loadSecret(); 
 
   try {
-    const port = process.env.PORT || 3000;
-    await fastify.listen({ port, host: "0.0.0.0" });
-    console.log(`Server running on port ${port}`);
+    await fastify.listen({ port: PORT, host: "0.0.0.0" });
+    console.log(`Server running on port ${PORT}`);
   } catch (err) {
     console.error("Server startup failed:", err);
     process.exit(1);
