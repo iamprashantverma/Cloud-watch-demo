@@ -2,14 +2,27 @@ const fastify = require("fastify")({
   logger: true,
 });
 
-const SECRET_KEY = process.env.APP_SECRET_KEY || "Local";
+const AWS = require("aws-sdk");
 
-if (!SECRET_KEY) {
-  console.error("APP_SECRET_KEY is missing. Cannot load secret key.");
-  process.exit(1);
+// AWS region
+const REGION = "ap-south-1"; // change as needed
+const SECRET_NAME = "myapp-secret";
+
+let SECRET_KEY = null;
+
+// Create a Secrets Manager client
+const secretsManager = new AWS.SecretsManager({ region: REGION });
+
+async function loadSecret() {
+  try {
+    const data = await secretsManager.getSecretValue({ SecretId: SECRET_NAME }).promise();
+    SECRET_KEY = data.SecretString;
+    console.log("Secret key loaded from AWS Secrets Manager");
+  } catch (err) {
+    console.error("Failed to load secret key from Secrets Manager", err);
+    process.exit(1);
+  }
 }
-
-console.log("Secret key loaded from environment variables");
 
 const users = {};
 
@@ -33,7 +46,6 @@ fastify.post("/signup", async (request, reply) => {
   return reply.code(201).send({ message: "Signup successful" });
 });
 
-
 fastify.post("/login", async (request, reply) => {
   const { username, password } = request.body;
 
@@ -45,15 +57,19 @@ fastify.post("/login", async (request, reply) => {
     return reply.code(401).send({ message: "Invalid credentials" });
   }
 
-  
   console.log("Login successful:", {
     username,
     issuedAt: new Date().toISOString(),
   });
-  return reply.send({ message: `Logged in with the secret : ${SECRET_KEY}`});
+
+  return reply.send({
+    message: `Logged in with the secret: ${SECRET_KEY}`,
+  });
 });
 
 const start = async () => {
+  await loadSecret();
+
   try {
     const port = process.env.PORT || 3000;
     await fastify.listen({ port, host: "0.0.0.0" });
