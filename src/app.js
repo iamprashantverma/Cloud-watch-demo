@@ -17,17 +17,17 @@ async function loadSecret() {
   const secret = JSON.parse(data.SecretString);
   SECRET_KEY = secret.APP_SECRET_KEY;
   PORT = secret.PORT || PORT;
-  console.log("Secret key and port loaded from AWS Secrets Manager:", { SECRET_KEY, PORT });
+  fastify.log.info("Secret key and port loaded from AWS Secrets Manager", { SECRET_KEY, PORT });
 }
 
 const users = {};
 
 fastify.post("/signup", async (request, reply) => {
   const { name, email, password } = request.body;
-  console.log("Signup attempt:", email);
+  fastify.log.info("Signup attempt", { email });
 
   if (users[email]) {
-    console.warn("Signup failed: user already exists:", email);
+    fastify.log.warn("Signup failed: user already exists", { email });
     return reply.code(409).send({ message: "User already exists" });
   }
 
@@ -38,35 +38,36 @@ fastify.post("/signup", async (request, reply) => {
     createdAt: new Date().toISOString(),
   };
 
-  console.log("User signed up:", email);
+  fastify.log.info("User signed up", { email });
   return reply.code(201).send({ message: "Signup successful" });
 });
 
 fastify.post("/login", async (request, reply) => {
   const { email, password } = request.body;
-  console.log("Login attempt:", email);
+  fastify.log.info("Login attempt", { email });
 
   const user = users[email];
   if (!user || user.password !== password) {
-    console.error("Login failed for user:", email);
+    fastify.log.error("Login failed for user", { email });
     return reply.code(401).send({ message: "Invalid credentials" });
   }
 
-  console.log("Login successful:", { email, issuedAt: new Date().toISOString() });
+  fastify.log.info("Login successful", { email, issuedAt: new Date().toISOString() });
   return reply.send({ message: `Logged in with the secret: ${SECRET_KEY}` });
 });
 
 fastify.get("/users", async (request, reply) => {
-  console.log("Fetching all users");
+  fastify.log.info("Fetching all users");
   return reply.send(Object.values(users).map(u => ({ name: u.name, email: u.email, createdAt: u.createdAt })));
 });
 
 fastify.get("/users/:email", async (request, reply) => {
   const { email } = request.params;
-  console.log("Fetching user:", email);
+  fastify.log.info("Fetching user", { email });
 
   const user = users[email];
   if (!user) {
+    fastify.log.warn("User not found", { email });
     return reply.code(404).send({ message: "User not found" });
   }
   return reply.send({ name: user.name, email: user.email, createdAt: user.createdAt });
@@ -75,26 +76,30 @@ fastify.get("/users/:email", async (request, reply) => {
 fastify.put("/users/:email/password", async (request, reply) => {
   const { email } = request.params;
   const { password } = request.body;
-  console.log("Updating password for user:", email);
+  fastify.log.info("Updating password for user", { email });
 
   const user = users[email];
   if (!user) {
+    fastify.log.warn("User not found for password update", { email });
     return reply.code(404).send({ message: "User not found" });
   }
 
   user.password = password;
+  fastify.log.info("Password updated successfully", { email });
   return reply.send({ message: "Password updated successfully" });
 });
 
 fastify.delete("/users/:email", async (request, reply) => {
   const { email } = request.params;
-  console.log("Deleting user:", email);
+  fastify.log.info("Deleting user", { email });
 
   if (!users[email]) {
+    fastify.log.warn("User not found for deletion", { email });
     return reply.code(404).send({ message: "User not found" });
   }
 
   delete users[email];
+  fastify.log.info("User deleted successfully", { email });
   return reply.send({ message: "User deleted successfully" });
 });
 
@@ -103,9 +108,9 @@ const start = async () => {
 
   try {
     await fastify.listen({ port: PORT, host: "0.0.0.0" });
-    console.log(`Server running on port ${PORT}`);
+    fastify.log.info(`Server running on port ${PORT}`);
   } catch (err) {
-    console.error("Server startup failed:", err);
+    fastify.log.error("Server startup failed", err);
     process.exit(1);
   }
 };
