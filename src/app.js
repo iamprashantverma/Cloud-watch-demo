@@ -42,6 +42,20 @@ fastify.post("/signup", async (request, reply) => {
   return reply.code(201).send({ message: "Signup successful" });
 });
 
+
+fastify.get("/health", async () => {
+  return { status: "ok", time: new Date().toISOString() };
+});
+
+fastify.get("/stats", async () => {
+  const list = Object.values(users);
+
+  return {
+    totalUsers: list.length,
+    lastSignup: list[list.length - 1]?.createdAt || null,
+  };
+});
+
 fastify.post("/login", async (request, reply) => {
   const { email, password } = request.body;
   fastify.log.info("Login attempt", { email });
